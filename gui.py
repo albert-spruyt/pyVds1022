@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-from vds1022 import VDS1022,hexAscii,printBytes
+from vds1022 import VDS1022,printBytes
 from scope import Scope
 from Trace import TraceSet,Trace 
 import sys
@@ -51,6 +51,31 @@ def series_to_polyline(xdata, ydata):
     memory[:(size-1)*2+1:2] = xdata
     memory[1:(size-1)*2+2:2] = ydata
     return polyline    
+
+class ScopeChannelWidget(QWidget):
+    def __init__(self,name):
+        super(ScopeChannelWidget, self).__init__()
+
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0,0,0,0)
+        self.setLayout(layout)
+        layout.addWidget(QLabel(name))
+
+        self.channelOn = QCheckBox("on")
+        layout.addWidget(self.channelOn)
+
+        self.voltageComboBox = LabeledComboBox(label='Voltage',
+                items=[ str(x) for x in range(len(VDS1022.vdivs))],
+                itemLabels= [ str(x[0]/x[1])+'v' for x in  VDS1022.vdivs ] )
+
+        layout.addWidget(self.voltageComboBox)
+
+    def getParams(self):
+        return {
+                'on': self.channelOn.isChecked(),
+                'voltage': self.voltageComboBox.getInt()
+                }
+
     
 class TestWindow(QMainWindow):
     def __init__(self,scope,parent=None):
@@ -71,30 +96,17 @@ class TestWindow(QMainWindow):
         self.runButton = QPushButton("Get")
         controlLayout.addWidget(self.runButton)
 
-        self.voltage1ComboBox = LabeledComboBox(label='Voltage 1',
-                items=[ str(x) for x in range(len(VDS1022.vdivs))],
-                itemLabels= [ str(x[0]/x[1])+'v' for x in  VDS1022.vdivs ] )
-
-        controlLayout.addWidget(self.voltage1ComboBox)
-
-        self.channel1 = QCheckBox("Channel1")
-        controlLayout.addWidget(self.channel1)
-
-        self.voltage2ComboBox = LabeledComboBox(label='Voltage 2',
-                items=[ str(x) for x in range(len(VDS1022.vdivs))],
-                itemLabels= [ str(x[0]/x[1])+'v' for x in  VDS1022.vdivs ] )
-
-        controlLayout.addWidget(self.voltage2ComboBox)
-
-        self.channel2 = QCheckBox("Channel2")
-        controlLayout.addWidget(self.channel2)
-
-
         speedVals =  [ 2**x for x in list(range(0,11))]
         self.speedsComboBox = LabeledComboBox(label='Timebase',
                 items=[ str(x) for x in speedVals],
                 itemLabels=[ str(100. / (x+1)) for x in speedVals] )
         controlLayout.addWidget(self.speedsComboBox)
+
+        self.channel1 = ScopeChannelWidget('1')
+        self.channel2 = ScopeChannelWidget('2')
+
+        controlLayout.addWidget(self.channel1)
+        controlLayout.addWidget(self.channel2)
 
         self.layout = QVBoxLayout()
         self.layout.addWidget(controlWidget)
@@ -115,20 +127,19 @@ class TestWindow(QMainWindow):
 
         scope.configure_timebase( self.speedsComboBox.getInt() )
 
-        scope.channel_on(0,self.channel1.isChecked() )
-        scope.channel_on(1,self.channel2.isChecked() )
-
-        scope.setVoltage(0,self.voltage1ComboBox.getInt() )
-        scope.setVoltage(1,self.voltage2ComboBox.getInt() )
+        ch1params = self.channel1.getParams()
+        ch2params = self.channel2.getParams()
+        scope.setVoltage(0,ch1params['voltage'])
+        scope.setVoltage(1,ch2params['voltage'])
 
         scope.configure_channel(0)
         scope.configure_channel(1)
 
         (ch1data,ch2data) = scope_getSamples(self.scope)
         
-        if self.channel1.isChecked() :
+        if ch1params['on']:
             self.add_data(range(len(ch1data)),ch1data, color=Qt.red)
-        if self.channel2.isChecked() :
+        if ch2params['on']:
             self.add_data(range(len(ch2data)),ch2data, color=Qt.blue)
 
         self.set_title("Semi live Scope")

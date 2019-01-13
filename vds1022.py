@@ -8,9 +8,8 @@ def AddValueAttachCommand(name,address,length,value):
         value>>=8 
     return ret
 
-
-def hexAscii(data):
-    return ''.join( d if 0x20 <= ord(d) <= 0x80 else '.' for x in data )
+#def hexAscii(data):
+#    return ''.join( d if 0x20 <= ord(d) <= 0x80 else '.' for x in data )
 
 def printBytes(val):
     count = 0 
@@ -18,7 +17,7 @@ def printBytes(val):
         if count % 16 == 0:
             print('')
         count+=1
-        print("%2.2x"%b),
+        print("%2.2x"%b,end=' ')
     print('')
 
 class VDS1022:
@@ -48,9 +47,9 @@ class VDS1022:
 	[ 1, 1 ],
 	[ 2, 1 ],
 	[ 5, 1 ] 
-        ]
+    ]
 
-    # args are specified as channel-tuples for each setting
+    # Args are specified as channel-tuples for each setting
     #    voltage # from 0-9
     #    lowpass = [0,0] # from 0-4
     #    channelOn = [0,0] # 0 for off 1 for on
@@ -72,7 +71,6 @@ class VDS1022:
         # blaat 
         self.calibration_data = [[[0 for k in range(10)] for j in range(2)] for i in range(3)]
 
-
         print("trying to open usb")
         self._openUsb()
 
@@ -92,7 +90,8 @@ class VDS1022:
             self.write(AddValueAttachCommand("read_flash", 432, 1, 1))
             calibration_data = self.read(2002)
 
-            printBytes(calibration_data)
+            if self.debug:
+                printBytes(calibration_data)
             
             self._parse_flash(calibration_data)
         except Exception as e:
@@ -158,7 +157,7 @@ class VDS1022:
             for y in range(2):
                 for x in range(10):
                     self.calibration_data[z][y][x] = shortBuf[count] & 0xffFF
-                    print("%3.3X"%shortBuf[count])
+                    print("%3.3X"%shortBuf[count],end=' ')
                     count+=1
 
     def _openUsb(self):
@@ -176,14 +175,11 @@ class VDS1022:
 
         self.handle = handle
 
-    def write(self,buf, dataLength=None):
-        if not dataLength:
-            dataLength = len(buf)
-
+    def write(self,buf):
         if self.debug:
             print("\nSending: ")
             printBytes(ord(x) for x in buf)
-        self.handle.bulkWrite(self.BULK_WRITE_ENDPOINT,buf,dataLength)
+        self.handle.bulkWrite(self.BULK_WRITE_ENDPOINT,buf,len(buf))
 
     def read(self,dataLength=DEFAULT_RESPONSE_LENGTH):
         ret = self.handle.bulkRead(self.BULK_READ_ENDPOINT,dataLength)
@@ -293,12 +289,10 @@ class VDS1022:
         # chl_on: Arg appears to be a bit mask of channels to turn on
         self._packed_cmd_response( 0xb, 0x3, 1, 'S')
 
-
         # edge_level_ext?
         self._packed_cmd_response( 0x10c, 0, 1, 'S')
 
         # TODO: here? #TODO: find out what Alyssa meant
-
         self.configure_channel(1)
         self.configure_timebase()
 
@@ -310,7 +304,6 @@ class VDS1022:
 
         # sync output
         self._packed_cmd_response( 0x6,0, 1, 'S')
-
 
         # pre_trg
         #self._packed_cmd_response( 0x5a, 0xf1, 1, 'S') # PRE_TRG_ADD
@@ -358,27 +351,16 @@ class VDS1022:
 
             num_samples = (5000 - 2) + 50 + 50
 
-            analog_data = np.zeros(num_samples,dtype='float32')
-
-            #
-            Range = (float(self.vdivs[self.voltage[channel]][0]) / self.vdivs[self.voltage[channel]][1]) * 255
-            vdivlog = math.log10(Range / 255)
-            #digits = -(int)vdivlog + (vdivlog < 0.0)
 
             # the layout is [11 bytes header] + [100 bytes trigger buffer] + [50 bytes pre] + [1000 bytes payload] + [50 bytes post]
             # the pre/payload/post seems to all be valid data
             # owon use only the payload, offset by 1 point, looks like they're trying to avoid some problem when triggering on square waves (sometimes you get a bad sample (or even two) at the start of the pre), idk
 
             data_in = np.frombuffer( buf[ 11 + 100 + 1:], '<i1')
-            #data_in = buf[ 11 + 100 + 1:]
-
-            for i in range(num_samples):
-                    #define ZEROOFF_HACK 50 // also in protocol.c :/
-                    ZEROOFF_HACK = 50
-                    analog_data[i] = Range / 255 * float(data_in[i]) - ZEROOFF_HACK
-                    #analog_data[i] = data_in[i]
-
-            ret[channel] = analog_data
+            ZEROOFF_HACK = 50
+            vdivs = self.vdivs[self.voltage[channel]] 
+            Range = (vdivs[0] / vdivs[1]) * 255
+            ret[channel] = [Range / 255 * x - ZEROOFF_HACK for x in data_in]
 
         return ret
 
