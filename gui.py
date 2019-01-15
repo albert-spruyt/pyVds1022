@@ -66,15 +66,32 @@ class ScopeChannelWidget(QWidget):
 
         self.voltageComboBox = LabeledComboBox(label='Voltage',
                 items=[ str(x) for x in range(len(VDS1022.vdivs))],
-                itemLabels= [ str(x[0]/x[1])+'v' for x in  VDS1022.vdivs ] )
+                itemLabels= [ str(x[0]/x[1])+'v' for x in  VDS1022.vdivs ]
+            )
+
+        items = [ str(x) for x in [1,0,2]]
+        self.couplingComboBox = LabeledComboBox(label='Coupling',
+                items=items,
+                itemLabels=items,
+            ) 
+
+        items = [str(x) for x in [0,1,2,3]]
+        self.lowpassComboBox = LabeledComboBox(label='Lowpass',
+                items=items,
+                itemLabels=items
+            )
 
         layout.addWidget(self.voltageComboBox)
+        layout.addWidget(self.couplingComboBox)
+        layout.addWidget(self.lowpassComboBox)
 
     def getParams(self):
         return {
                 'on': self.channelOn.isChecked(),
-                'voltage': self.voltageComboBox.getInt()
-                }
+                'voltage': self.voltageComboBox.getInt(),
+                'coupling': self.couplingComboBox.getInt(),
+                'lowpass': self.lowpassComboBox.getInt(),
+            }
 
     
 class TestWindow(QMainWindow):
@@ -99,17 +116,27 @@ class TestWindow(QMainWindow):
         speedVals =  [ 2**x for x in list(range(0,11))]
         self.speedsComboBox = LabeledComboBox(label='Timebase',
                 items=[ str(x) for x in speedVals],
-                itemLabels=[ str(100. / (x+1)) for x in speedVals] )
+                itemLabels=[ str(100. / (x+1)) for x in speedVals]
+            )
         controlLayout.addWidget(self.speedsComboBox)
 
-        self.channel1 = ScopeChannelWidget('1')
-        self.channel2 = ScopeChannelWidget('2')
-
-        controlLayout.addWidget(self.channel1)
-        controlLayout.addWidget(self.channel2)
+        self.trg_pre = LabeledComboBox(label='trg_pre',
+                items= [ str(x) for x in range(0,50000,1000) ],
+                itemLabels= [ str(x) for x in range(0,50000,1000) ],
+            )
+        self.trg_suf = LabeledComboBox(label='trg_suf',
+                items= [ str(x) for x in range(0,50000,1000) ],
+                itemLabels= [ str(x) for x in range(0,50000,1000) ],
+            )
+        controlLayout.addWidget(self.speedsComboBox)
+        controlLayout.addWidget(self.trg_suf)
+        controlLayout.addWidget(self.trg_pre)
 
         self.layout = QVBoxLayout()
         self.layout.addWidget(controlWidget)
+        self.channels = [ ScopeChannelWidget('1'), ScopeChannelWidget('2') ]
+        self.layout.addWidget(self.channels[0])
+        self.layout.addWidget(self.channels[1])
         self.layout.addWidget(self.view)
 
         self.layoutWidget = QWidget()
@@ -127,19 +154,22 @@ class TestWindow(QMainWindow):
 
         scope.configure_timebase( self.speedsComboBox.getInt() )
 
-        ch1params = self.channel1.getParams()
-        ch2params = self.channel2.getParams()
-        scope.setVoltage(0,ch1params['voltage'])
-        scope.setVoltage(1,ch2params['voltage'])
+        scope.configure_trg_pre(self.trg_pre.getInt() )
+        scope.configure_trg_suf(self.trg_suf.getInt() )
 
-        scope.configure_channel(0)
-        scope.configure_channel(1)
+        for i in [0,1]:
+            params = self.channels[i].getParams() 
+            scope.setVoltage(i,params['voltage'])
+            scope.setCoupling(i,params['coupling'])
+            scope.setLowpass(i,params['lowpass'])
+
+            scope.configure_channel(i)
 
         (ch1data,ch2data) = scope_getSamples(self.scope)
         
-        if ch1params['on']:
+        if self.channels[0].getParams()['on']:
             self.add_data(range(len(ch1data)),ch1data, color=Qt.red)
-        if ch2params['on']:
+        if self.channels[1].getParams()['on']:
             self.add_data(range(len(ch2data)),ch2data, color=Qt.blue)
 
         self.set_title("Semi live Scope")
@@ -166,15 +196,13 @@ def scope_getSamples(scope):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
 
-    scope = Scope(voltage=[6,6])
+    scope = Scope()
     scope.capture_init()
 
     window = TestWindow(scope)
 
-    npoints = 1000000
     window.setWindowTitle("Simple performance example")
-
     window.show()
-    window.resize(500, 400)
+    window.resize(1000, 400)
 
     sys.exit(app.exec_())

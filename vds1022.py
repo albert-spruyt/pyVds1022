@@ -8,16 +8,11 @@ def AddValueAttachCommand(name,address,length,value):
         value>>=8 
     return ret
 
-#def hexAscii(data):
-#    return ''.join( d if 0x20 <= ord(d) <= 0x80 else '.' for x in data )
-
 def printBytes(val):
-    count = 0 
-    for b in val:
-        if count % 16 == 0:
+    for i in range(val):
+        if i % 16 == 0:
             print('')
-        count+=1
-        print("%2.2x"%b,end=' ')
+        print("%2.2x"%val[i],end=' ')
     print('')
 
 class VDS1022:
@@ -30,7 +25,7 @@ class VDS1022:
     BULK_READ_ENDPOINT = 0x81
     DEFAULT_RESPONSE_LENGTH = 5
 
-    #calibrationtypes {
+    #calibration types
     GAIN = 0
     AMPLITUDE = 1
     COMPENSATION = 2
@@ -60,6 +55,8 @@ class VDS1022:
             coupling=[0,0],
             channelOn=[True,False],
             timebase = 0x190,
+            trg_suf=5000,
+            trg_pre=0
         ):
         # Save the parameters
         self.voltage = voltage 
@@ -67,8 +64,9 @@ class VDS1022:
         self.coupling = coupling
         self.channelOn = channelOn
         self.timebase = timebase
+        self.trg_pre = trg_pre
+        self.trg_suf = trg_suf
 
-        # blaat 
         self.calibration_data = [[[0 for k in range(10)] for j in range(2)] for i in range(3)]
 
         print("trying to open usb")
@@ -100,14 +98,13 @@ class VDS1022:
             self.handle.close()
 
     def checkBitstreamUpload(self):
-            # Check if we need to upload the FPGA bitstream
-            response = self._packed_cmd_response( 547, 0, 1, 'E') # FPGA_DOWNLOAD_QUERY_ADD
-            
-            if response == 0:
-                print("uploading bitstream")
-                self._uploadBitstream()
-                print("done")
-
+        # Check if we need to upload the FPGA bitstream
+        response = self._packed_cmd_response( 547, 0, 1, 'E') # FPGA_DOWNLOAD_QUERY_ADD
+        
+        if response == 0:
+            print("uploading bitstream")
+            self._uploadBitstream()
+            print("done")
 
     def _uploadBitstream(self,fpgaPath='VDS1022_FPGA_V3.7.bin'):
         with open(fpgaPath,'rb') as fpgaFile:
@@ -120,7 +117,7 @@ class VDS1022:
             print("Buffersize: ",bufferSize)
 
         i = 0 
-        while i < 1 + (len(bitStream) // (bufferSize - 4)) : 
+        while i < 1 + (len(bitStream) // (bufferSize - 4)): 
             # transfer ID
             if self.debug:
                 print('Sending chunk:',i)
@@ -139,7 +136,6 @@ class VDS1022:
 
             if response != i:
                 raise Exception("Bad response in bitstream upload",hex(i) )
-
             i+=1
 
     def _parse_flash(self,buf):
@@ -167,9 +163,8 @@ class VDS1022:
             skip_on_error=True,
         )
         if handle is None:
-            print("Device not present, or user is not allowed to access device.")
-            sys.exit(-1)
-            pass
+            raise Exception("Device not present, or user is not allowed to access device.")
+
         handle.claimInterface(self.INTERFACE)
         handle.clearHalt(self.BULK_WRITE_ENDPOINT)
 
@@ -201,6 +196,7 @@ class VDS1022:
         return struct.unpack('<I',resp[1:])[0]
 
     def configure_channel(self,channel):
+        print("Configuring channel:",channel)
         #Channel_ch1/2, bit fields
         #bit 7 channel is on                => 0x80
         #bit 5,6 coupling method ( 1,0,2 )  => 0x20,0,0x40
@@ -210,14 +206,16 @@ class VDS1022:
         #bit 0 no   
         channelArg = 0
 	# channel_ch1 # This sets the voltage
-        print("channel on",self.channelOn)
+        print("\tchannel on",self.channelOn[channel])
         if self.channelOn[channel] == True:
             channelArg |= 0x80
         
         #coupling ( 1,0,2)
+        print("\tCoupling",self.coupling[channel])
         channelArg |= ( self.coupling[channel] << 5 )
 
         #lowpass filter
+        print("\tLowpass",self.lowpass[channel])
         channelArg |= ( self.lowpass[channel] << 2 )
 
         # After voltage 5 we need to set the input attenuation
@@ -233,7 +231,7 @@ class VDS1022:
 	# volt_gain_ch1
         tmp = self.calibration_data[self.GAIN][channel][self.voltage[channel]]
 
-        print('gain',hex(tmp))
+        print('\tvoltage',hex(self.voltage[channel]))
         if channel == 0:
             self._packed_cmd_response( 0x116, tmp, 2, 'S')
         else:
@@ -257,6 +255,7 @@ class VDS1022:
     # 0xc0 = ~500 samples (1 1khz pulse) = 0.5msps
 
     def configure_timebase(self,timebase=None): 
+        print("Configuring timebase:",timebase)
         if timebase:
             self.timebase = timebase
         # timebase
@@ -269,6 +268,7 @@ class VDS1022:
             self._packed_cmd_response( 0xa, 1, 1, 'S')
 
     def capture_init(self):
+        print("Capture init")
         # phase_fine
         self._packed_cmd_response( 0x18, 0x0, 1, 'S') # PHASE_FINE
         self._packed_cmd_response( 0x19, 0x0, 1, 'S') # what is this?
@@ -293,8 +293,9 @@ class VDS1022:
         self._packed_cmd_response( 0x10c, 0, 1, 'S')
 
         # TODO: here? #TODO: find out what Alyssa meant
+        self.configure_channel(0)
         self.configure_channel(1)
-        self.configure_timebase()
+        self.configure_timebase(self.timebase)
 
         # sample
         self._packed_cmd_response( 0x9, 0, 1, 'S')
@@ -305,21 +306,20 @@ class VDS1022:
         # sync output
         self._packed_cmd_response( 0x6,0, 1, 'S')
 
-        # pre_trg
-        #self._packed_cmd_response( 0x5a, 0xf1, 1, 'S') # PRE_TRG_ADD
-        #self._packed_cmd_response( 0x5b, 0x09, 1, 'S')
-        self._packed_cmd_response( 0x5a, 0x00, 1, 'S') # PRE_TRG_ADD
-        self._packed_cmd_response( 0x5b, 0x00, 1, 'S')
-
-        # suf_trg
-        #self._packed_cmd_response( 0x56, 0xfb, 1, 'S') # SUF_TRG_ADD
-        #self._packed_cmd_response( 0x57, 0x09, 1, 'S')
-        self._packed_cmd_response( 0x56, 0x88, 1, 'S') # SUF_TRG_ADD
-        self._packed_cmd_response( 0x57, 0x13, 1, 'S')
-        self._packed_cmd_response( 0x58, 0, 1, 'S')
-        self._packed_cmd_response( 0x59, 0, 1, 'S')
+        self.configure_trg_pre(self.trg_pre);
+        self.configure_trg_suf(self.trg_suf);
 
         # edge_level_ext (again)
+
+    def configure_trg_suf(self,val):
+        print("configuring trg_suf",val)
+        self._packed_cmd_response( 0x56, val & 0xff, 1, 'S') # SUF_TRG_ADD
+        self._packed_cmd_response( 0x57, val >> 8, 1, 'S')
+
+    def configure_trg_pre(self,val):
+        print("configuring trg_pre",val)
+        self._packed_cmd_response( 0x56, val & 0xff, 1, 'S') # SUF_TRG_ADD
+        self._packed_cmd_response( 0x57, val >> 8, 1, 'S')
 
     def capture_start(self):
         self._packed_cmd_response( 0x10c, 1, 1, 'S')
@@ -351,10 +351,10 @@ class VDS1022:
 
             num_samples = (5000 - 2) + 50 + 50
 
-
             # the layout is [11 bytes header] + [100 bytes trigger buffer] + [50 bytes pre] + [1000 bytes payload] + [50 bytes post]
             # the pre/payload/post seems to all be valid data
-            # owon use only the payload, offset by 1 point, looks like they're trying to avoid some problem when triggering on square waves (sometimes you get a bad sample (or even two) at the start of the pre), idk
+            # Owon use only the payload, offset by 1 point, looks like they're trying to avoid some problem when triggering 
+            # on square waves (sometimes you get a bad sample (or even two) at the start of the pre), idk
 
             data_in = np.frombuffer( buf[ 11 + 100 + 1:], '<i1')
             ZEROOFF_HACK = 50

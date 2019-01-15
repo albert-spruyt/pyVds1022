@@ -185,10 +185,8 @@ class TraceSet():
 
             if ((length & 0x80) != 0): #length is encoded in more then 1 byte
                 addLen = length & 0x7F #how many byte the length is actually encoded in.
-                print("addLen",addLen)
                 length = 0
                 for i in range(addLen):
-                    print("length",length)
                     length = length + (ord(f.read(1)) << (i * 8))
 
             if tag == self.TraceBlock:
@@ -214,14 +212,15 @@ class TraceSet():
                 else:
                     self._sampleCodingByteSize = self._sampleCoding
             elif tag == 0 or length == 0:
-                print("Unknown tag: ",hex(tag),"len: ", length) # TODO: support other optional tags
+                print ("Unknown tag: %x len: %d" % (tag, length)) # TODO: support other optional tags
                 break
             else:
+                print ("Unknown tag: %x len: %d" % (tag, length)) # TODO: support other optional tags
                 f.read(length)
 
-            print("Offset",offset,)
-            print("TraceBlockSpace: ",self._traceBlockSpace)
-            print("Tag: %x len: %d" % (tag, length)) # TODO: support other optional tags
+            print ("Offset",offset)
+            print ("TraceBlockSpace: ",self._traceBlockSpace)
+            print ("Tag: %x len: %d" % (tag, length)) # TODO: support other optional tags
             offset = offset + 2 + addLen + length
 
     def findtag(self,searchTag):
@@ -332,7 +331,7 @@ class TraceSet():
 
         # we only accept exact same size inputs
         if (len(trace._title) != self._titleSpace):
-            print("Wrong title size! ")
+            print("Wrong title size! %08x/%08x"%(len(trace._title),self._titleSpace))
             return
         f.write(trace._title)
         if (len(trace._data) != self._dataSpace):
