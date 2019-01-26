@@ -155,6 +155,7 @@ class VDS1022:
                     self.calibration_data[z][y][x] = shortBuf[count] & 0xffFF
                     print("%3.3X"%shortBuf[count],end=' ')
                     count+=1
+                print()
 
     def _openUsb(self):
         handle = usb1.USBContext().openByVendorIDAndProductID(
@@ -282,9 +283,7 @@ class VDS1022:
         # trg_holdoff_index_ch1
         self._packed_cmd_response( 0x27, 0x41, 1, 'S') 
 
-        # edge_level_ch1
-        self._packed_cmd_response( 0x2e, 0x32, 1, 'S') # pulse_level_ch1_ADD/EDGE LEVEL
-        self._packed_cmd_response( 0x2f, 0x28, 1, 'S') # 
+        self.configure_trg_edge_level(0x2832)
 
         # chl_on: Arg appears to be a bit mask of channels to turn on
         self._packed_cmd_response( 0xb, 0x3, 1, 'S')
@@ -311,6 +310,11 @@ class VDS1022:
 
         # edge_level_ext (again)
 
+    def configure_trg_edge_level(self,val):
+        # edge_level_ch1
+        self._packed_cmd_response( 0x2e, val & 0xff, 1, 'S') # pulse_level_ch1_ADD/EDGE LEVEL
+        self._packed_cmd_response( 0x2f, val >> 8, 1, 'S') # 
+
     def configure_trg_suf(self,val):
         print("configuring trg_suf",val)
         self._packed_cmd_response( 0x56, val & 0xff, 1, 'S') # SUF_TRG_ADD
@@ -332,8 +336,8 @@ class VDS1022:
         return self._packed_cmd_response( 0x7a, 0, 1, 'S')
 
     def get_data(self):
-        self.write(AddValueAttachCommand('',0x1000,2,0x0101)) # getdata_ADD
-        #self.write(AddValueAttachCommand('',0x1000,2,0x0505)) # getdata_ADD
+        #self.write(AddValueAttachCommand('',0x1000,2,0x0101)) # getdata_ADD
+        self.write(AddValueAttachCommand('',0x1000,2,0x0505)) # getdata_ADD
 
         ret = [ [],[] ]
 
@@ -349,24 +353,25 @@ class VDS1022:
             if channel < 0 or channel > 1:
                     raise Exception ("invalid channel %d", channel)
 
-            num_samples = (5000 - 2) + 50 + 50
+            #num_samples = (5000 - 2) + 50 + 50
 
             # the layout is [11 bytes header] + [100 bytes trigger buffer] + [50 bytes pre] + [1000 bytes payload] + [50 bytes post]
             # the pre/payload/post seems to all be valid data
             # Owon use only the payload, offset by 1 point, looks like they're trying to avoid some problem when triggering 
             # on square waves (sometimes you get a bad sample (or even two) at the start of the pre), idk
 
-            data_in = np.frombuffer( buf[ 11 + 100 + 1:], '<i1')
-            ZEROOFF_HACK = 50
-            vdivs = self.vdivs[self.voltage[channel]] 
-            Range = (vdivs[0] / vdivs[1]) * 255
-            ret[channel] = [Range / 255 * x - ZEROOFF_HACK for x in data_in]
+            data_in = np.frombuffer( buf[ 11 + 100 + 1:], '<i1').astype('float32')
+            ZEROOFF_HACK = 50 
+            vdivs = self.vdivs[self.voltage[i]]
+            # Empirically tested :( (there are 10 divs on the OWON screenshot I found. But there are still supposed to be 256 values in a byte...
+            # or optionally only 5 positive divs. So somewhere something is wrong
+            Range = (float(vdivs[0]) / float(vdivs[1])) * 10  / 256# value of 1/5? Total range?
+            ret[channel] = Range * ( data_in - ZEROOFF_HACK)
 
         return ret
 
     def force_trigger(self):
         self._packed_cmd_response( 0xc, 0x3, 1, 'S') # FORCETRIG_add
-        return
 
     def close(self):
         if self.handle:

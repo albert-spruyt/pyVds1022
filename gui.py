@@ -5,9 +5,9 @@ from Trace import TraceSet,Trace
 import sys
     
 from PyQt5.QtChart import QChart, QChartView, QLineSeries
-from PyQt5.QtGui import QPolygonF, QPainter
+from PyQt5.QtGui import QPolygonF, QPainter, QPen
 from PyQt5.QtWidgets import QMainWindow, QHBoxLayout, QVBoxLayout, QPushButton,QWidget,QLabel,QComboBox, QApplication, QCheckBox
-from PyQt5.QtCore import pyqtSlot,Qt
+from PyQt5.QtCore import pyqtSlot, Qt, QTimer
 import numpy as np
 
 class LabeledComboBox(QComboBox):
@@ -37,6 +37,9 @@ class LabeledComboBox(QComboBox):
             return int(str(self.comboBox.currentData()))
         return int(str(self.comboBox.currentText()))
 
+    def setCurrentIndex(self,index):
+        self.comboBox.setCurrentIndex(index)
+
 def series_to_polyline(xdata, ydata):
     """Convert series data to QPolygon(F) polyline
     
@@ -62,24 +65,32 @@ class ScopeChannelWidget(QWidget):
         layout.addWidget(QLabel(name))
 
         self.channelOn = QCheckBox("on")
+        self.channelOn.setChecked(True)
         layout.addWidget(self.channelOn)
 
         self.voltageComboBox = LabeledComboBox(label='Voltage',
                 items=[ str(x) for x in range(len(VDS1022.vdivs))],
-                itemLabels= [ str(x[0]/x[1])+'v' for x in  VDS1022.vdivs ]
+                itemLabels= [ str(x[0]/x[1])+'v per div' for x in  VDS1022.vdivs ],
+                parent=self,
             )
+        self.voltageComboBox.setCurrentIndex(6)
 
-        items = [ str(x) for x in [1,0,2]]
+        print("voltage combobox has", self.voltageComboBox.count())
+
+        items = [ str(x) for x in [0,1,2]]
         self.couplingComboBox = LabeledComboBox(label='Coupling',
                 items=items,
                 itemLabels=items,
+                parent=self,
             ) 
 
         items = [str(x) for x in [0,1,2,3]]
         self.lowpassComboBox = LabeledComboBox(label='Lowpass',
                 items=items,
-                itemLabels=items
+                itemLabels=items,
+                parent=self,
             )
+
 
         layout.addWidget(self.voltageComboBox)
         layout.addWidget(self.couplingComboBox)
@@ -99,7 +110,6 @@ class TestWindow(QMainWindow):
         super(TestWindow, self).__init__(parent=parent)
 
         self.scope = scope
-        self.ncurves = 0
         self.chart = QChart()
         self.chart.legend().hide()
         self.view = QChartView(self.chart)
@@ -113,21 +123,26 @@ class TestWindow(QMainWindow):
         self.runButton = QPushButton("Get")
         controlLayout.addWidget(self.runButton)
 
-        speedVals =  [ 2**x for x in list(range(0,11))]
+        self.autoCheckBox = QCheckBox("Auto")
+        controlLayout.addWidget(self.autoCheckBox)
+
+        speedVals =  [ 2**x for x in list(range(0,16))]
         self.speedsComboBox = LabeledComboBox(label='Timebase',
-                items=[ str(x) for x in speedVals],
-                itemLabels=[ str(100. / (x+1)) for x in speedVals]
+                items=['0'] + [ str(x) for x in speedVals],
+                itemLabels=['100'] + [ str(100. / (x+1)) for x in speedVals]
             )
         controlLayout.addWidget(self.speedsComboBox)
 
         self.trg_pre = LabeledComboBox(label='trg_pre',
-                items= [ str(x) for x in range(0,50000,1000) ],
-                itemLabels= [ str(x) for x in range(0,50000,1000) ],
+                items= [ str(x) for x in range(0,100000,1000) ],
+                itemLabels= [ str(x) for x in range(0,100000,1000) ],
             )
         self.trg_suf = LabeledComboBox(label='trg_suf',
-                items= [ str(x) for x in range(0,50000,1000) ],
-                itemLabels= [ str(x) for x in range(0,50000,1000) ],
+                items= [ str(x) for x in range(0,100000,1000) ],
+                itemLabels= [ str(x) for x in range(0-5000,100000-5000,1000) ],
             )
+        self.trg_suf.setCurrentIndex(5)
+
         controlLayout.addWidget(self.speedsComboBox)
         controlLayout.addWidget(self.trg_suf)
         controlLayout.addWidget(self.trg_pre)
@@ -165,7 +180,8 @@ class TestWindow(QMainWindow):
 
             scope.configure_channel(i)
 
-        (ch1data,ch2data) = scope_getSamples(self.scope)
+        self.scope.capture_start()
+        (ch1data,ch2data) = self.scope.get_data()
         
         if self.channels[0].getParams()['on']:
             self.add_data(range(len(ch1data)),ch1data, color=Qt.red)
@@ -173,36 +189,32 @@ class TestWindow(QMainWindow):
             self.add_data(range(len(ch2data)),ch2data, color=Qt.blue)
 
         self.set_title("Semi live Scope")
+
+        if self.autoCheckBox.isChecked():
+            QTimer.singleShot(200,self.on_get)
         
     def set_title(self, title):
         self.chart.setTitle(title)
 
     def add_data(self, xdata, ydata,color):
         curve = QLineSeries()
-        pen = curve.pen()
-        pen.setColor(color)
-        pen.setWidthF(.1)
-        curve.setPen(pen)
+        curve.setPen(QPen(color,.1))
         curve.setUseOpenGL(True)
         curve.append(series_to_polyline(xdata, ydata))
         self.chart.addSeries(curve)
         self.chart.createDefaultAxes()
-        self.ncurves += 1
-
-def scope_getSamples(scope):
-    scope.capture_start()
-    return scope.get_data()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
 
     scope = Scope()
-    scope.capture_init()
 
     window = TestWindow(scope)
 
-    window.setWindowTitle("Simple performance example")
+    window.setWindowTitle("Owon VDS1022 GUI")
     window.show()
     window.resize(1000, 400)
 
-    sys.exit(app.exec_())
+    ret = app.exec_()
+    scope.close() # close background thread
+    sys.exit(ret)

@@ -1,11 +1,12 @@
 from queue import Queue
 from threading import Thread
 from vds1022  import VDS1022 
-import time
+import time,traceback
 
 # Scope is the interface the application talks to.
 # The reason for this is that to ensure proper scope operation it must be continually polled (for some reason)
-def runThread(scope,cmdQueue,outQueue):
+def runThread(parent,cmdQueue,outQueue):
+    scope = parent.scope
     try:
         scope.capture_init()
         while True:
@@ -22,7 +23,7 @@ def runThread(scope,cmdQueue,outQueue):
                     outQueue.put([ [],[] ])
                 elif cmd ==  'get_data':
                     print("waiting for data ready")
-                    timeout = time.time() + 3
+                    timeout = time.time() + parent.timeout
                     timedOut = False
                     while scope.get_data_ready() == 0:
                         if timeout < time.time():
@@ -39,6 +40,8 @@ def runThread(scope,cmdQueue,outQueue):
                     scope.configure_trg_pre(args[0])
                 elif cmd == 'trg_suf':
                     scope.configure_trg_suf(args[0])
+                elif cmd == 'trg_egde_level':
+                    scope.configure_trg_edge_level(args[0])
                 elif cmd == 'close':
                     break
                 else:
@@ -52,6 +55,7 @@ def runThread(scope,cmdQueue,outQueue):
 
     except Exception as e:
         print("Exception in thread",e)
+        print(traceback.format_exc())
     scope.close()
 
 class Scope():
@@ -63,8 +67,11 @@ class Scope():
             timebase = 0x190,
             trg_suf=5000,
             trg_pre=0,
+            timeout=3,
             ):
-   
+
+
+        self.timeout = timeout
         print("making a scope")
         self.scope = VDS1022(voltage,lowpass,coupling,channelOn,timebase,trg_suf,trg_pre)
         print("made a scope")
@@ -76,7 +83,7 @@ class Scope():
         print("in scope constructor timebase",timebase)
         try:
             print("Trying to make new thread")
-            self.thread = Thread(target=runThread,args=(self.scope,self.cmdQueue,self.outQueue))
+            self.thread = Thread(target=runThread,args=(self,self.cmdQueue,self.outQueue))
             self.thread.start()
             self.configure_timebase(timebase)
             
@@ -124,6 +131,9 @@ class Scope():
 
     def configure_trg_pre(self,val):
         self.cmdQueue.put(['trg_pre',[val]])
+
+    def configure_trg_edge_level(self,val):
+        self.cmdQueue.put(['trg_edge_level',[val]])
 
     def reconnect(self):
         pass
