@@ -58,10 +58,13 @@ def runThread(parent,cmdQueue,outQueue):
         print(traceback.format_exc())
     scope.close()
 
+
 class Scope():
+    timebaseNames = ['100MSP', '50MSPS', '32MSPS', '16MSPS','8MSPS','4MSPS','2MSPS','1MSPS','500KSPS','250KSPS','125KSPS','62KSPS']
+    timebaseValues = [     0x0,    0x01 ,     0x3 ,      0x6,   0x18,   0x30,   0x60,   0xc0,    0x180,    0x300,    0x600,  0xc00 ]
+    timebaseDiv   = [100/1e-6, 50/1e-6 , 32/1e-6 ,  16/1e-6, 8/1e-6, 4/1e-6, 2/1e-6, 1/1e-6, 500/1e-3, 250/1e-3, 125/1e-3, 62/1e-3] 
     def __init__(self,
             voltage=[7,1],
-            lowpass=[0,0],
             coupling=[0,0],
             channelOn=[True,False],
             timebase = 0x190,
@@ -73,7 +76,7 @@ class Scope():
 
         self.timeout = timeout
         print("making a scope")
-        self.scope = VDS1022(voltage,lowpass,coupling,channelOn,timebase,trg_suf,trg_pre)
+        self.scope = VDS1022(voltage,coupling,channelOn,timebase,trg_suf,trg_pre)
         print("made a scope")
 
         self.cmdQueue = Queue(10)
@@ -123,9 +126,6 @@ class Scope():
     def setCoupling(self,channelIdx,coupling):
         self.scope.coupling[channelIdx] = coupling
    
-    def setLowpass(self,channelIdx,lowpass):
-        self.scope.lowpass[channelIdx] = lowpass
-
     def configure_trg_suf(self,val):
         self.cmdQueue.put(['trg_suf',[val]])
 

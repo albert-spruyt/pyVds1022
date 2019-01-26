@@ -46,12 +46,10 @@ class VDS1022:
 
     # Args are specified as channel-tuples for each setting
     #    voltage # from 0-9
-    #    lowpass = [0,0] # from 0-4
     #    channelOn = [0,0] # 0 for off 1 for on
     #    coupling = [0,0] # allowed to be 1,0,2
     def __init__(self,
             voltage=[7,7],
-            lowpass=[0,4],
             coupling=[0,0],
             channelOn=[True,False],
             timebase = 0x190,
@@ -60,7 +58,6 @@ class VDS1022:
         ):
         # Save the parameters
         self.voltage = voltage 
-        self.lowpass = lowpass
         self.coupling = coupling
         self.channelOn = channelOn
         self.timebase = timebase
@@ -215,13 +212,9 @@ class VDS1022:
         print("\tCoupling",self.coupling[channel])
         channelArg |= ( self.coupling[channel] << 5 )
 
-        #lowpass filter
-        print("\tLowpass",self.lowpass[channel])
-        channelArg |= ( self.lowpass[channel] << 2 )
-
         # After voltage 5 we need to set the input attenuation
         if self.voltage[channel] >= 6:
-            channelArg |= 0x2
+            channelArg |= 0x1 << 1
 
         # send it to the scope
         if channel == 0:
@@ -241,7 +234,7 @@ class VDS1022:
         # zero_off_ch1
         # TODO: 50 should be adjustable #TODO what is going on here
         tmp = self.calibration_data[self.COMPENSATION][channel][self.voltage[channel]]
-        tmp = tmp - (50 * self.calibration_data[self.AMPLITUDE][channel][self.voltage[channel]] // 100)
+        tmp -= 50 * self.calibration_data[self.AMPLITUDE][channel][self.voltage[channel]] // 100
 
         if channel == 0:
             self._packed_cmd_response( 0x10a, tmp, 2, 'S')
@@ -254,6 +247,7 @@ class VDS1022:
     # 0x30 = ~2k samples (1 1khz pulse) =  2msps?
     # 0x60 = ~1k samples (1 1khz pulse) =  1msps?
     # 0xc0 = ~500 samples (1 1khz pulse) = 0.5msps
+
 
     def configure_timebase(self,timebase=None): 
         print("Configuring timebase:",timebase)
@@ -283,6 +277,7 @@ class VDS1022:
         # trg_holdoff_index_ch1
         self._packed_cmd_response( 0x27, 0x41, 1, 'S') 
 
+#        self.configure_trg_edge_level(0x2832)
         self.configure_trg_edge_level(0x2832)
 
         # chl_on: Arg appears to be a bit mask of channels to turn on

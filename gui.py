@@ -6,11 +6,11 @@ import sys
     
 from PyQt5.QtChart import QChart, QChartView, QLineSeries
 from PyQt5.QtGui import QPolygonF, QPainter, QPen
-from PyQt5.QtWidgets import QMainWindow, QHBoxLayout, QVBoxLayout, QPushButton,QWidget,QLabel,QComboBox, QApplication, QCheckBox
+from PyQt5.QtWidgets import QMainWindow, QHBoxLayout, QVBoxLayout, QPushButton,QWidget,QLabel,QComboBox, QApplication, QCheckBox, QLineEdit
 from PyQt5.QtCore import pyqtSlot, Qt, QTimer
 import numpy as np
 
-class LabeledComboBox(QComboBox):
+class LabeledComboBox(QWidget):
     def __init__(self,label='Label',parent=None,items=[],itemLabels=None):
         super(LabeledComboBox, self).__init__(parent=parent)
 
@@ -40,7 +40,26 @@ class LabeledComboBox(QComboBox):
     def setCurrentIndex(self,index):
         self.comboBox.setCurrentIndex(index)
 
-def series_to_polyline(xdata, ydata):
+class LabeledLineEdit(QWidget):
+    def __init__(self,label='Label',parent=None,text='text'):
+        super(LabeledLineEdit, self).__init__(parent=parent)
+
+        layout = QHBoxLayout()
+        self.setLayout(layout)
+        layout.addWidget(QLabel(label))
+
+        layout.margin =0
+        layout.setContentsMargins(0,0,0,0)
+    
+        self.lineEdit = QLineEdit()
+        self.lineEdit.setText(text)
+        layout.addWidget(self.lineEdit)
+
+    def getText(self):
+        return self.lineEdit.text()
+        
+
+def series_to_polyline(xdata, ydata,timebase):
     """Convert series data to QPolygon(F) polyline
     
     This code is derived from PythonQwt's function named 
@@ -51,8 +70,8 @@ def series_to_polyline(xdata, ydata):
     dtype, tinfo = np.float, np.finfo  # integers: = np.int, np.iinfo
     pointer.setsize(2*polyline.size()*tinfo(dtype).dtype.itemsize)
     memory = np.frombuffer(pointer, dtype)
-    memory[:(size-1)*2+1:2] = xdata
-    memory[1:(size-1)*2+2:2] = ydata
+    memory[:(size-1)*2+1:2] = np.array(xdata) / timebase
+    memory[1:(size-1)*2+2:2] = ydata 
     return polyline    
 
 class ScopeChannelWidget(QWidget):
@@ -75,33 +94,22 @@ class ScopeChannelWidget(QWidget):
             )
         self.voltageComboBox.setCurrentIndex(6)
 
-        print("voltage combobox has", self.voltageComboBox.count())
-
-        items = [ str(x) for x in [0,1,2]]
+        items = ['1','0','2']
+        itemNames = ['DC','AC','Ground']
         self.couplingComboBox = LabeledComboBox(label='Coupling',
                 items=items,
-                itemLabels=items,
+                itemLabels=itemNames,
                 parent=self,
             ) 
 
-        items = [str(x) for x in [0,1,2,3]]
-        self.lowpassComboBox = LabeledComboBox(label='Lowpass',
-                items=items,
-                itemLabels=items,
-                parent=self,
-            )
-
-
         layout.addWidget(self.voltageComboBox)
         layout.addWidget(self.couplingComboBox)
-        layout.addWidget(self.lowpassComboBox)
 
     def getParams(self):
         return {
                 'on': self.channelOn.isChecked(),
                 'voltage': self.voltageComboBox.getInt(),
                 'coupling': self.couplingComboBox.getInt(),
-                'lowpass': self.lowpassComboBox.getInt(),
             }
 
     
@@ -126,10 +134,9 @@ class TestWindow(QMainWindow):
         self.autoCheckBox = QCheckBox("Auto")
         controlLayout.addWidget(self.autoCheckBox)
 
-        speedVals =  [ 2**x for x in list(range(0,16))]
         self.speedsComboBox = LabeledComboBox(label='Timebase',
-                items=['0'] + [ str(x) for x in speedVals],
-                itemLabels=['100'] + [ str(100. / (x+1)) for x in speedVals]
+                items= self.scope.timebaseValues,
+                itemLabels=[str(x) for x in self.scope.timebaseNames],
             )
         controlLayout.addWidget(self.speedsComboBox)
 
@@ -146,6 +153,9 @@ class TestWindow(QMainWindow):
         controlLayout.addWidget(self.speedsComboBox)
         controlLayout.addWidget(self.trg_suf)
         controlLayout.addWidget(self.trg_pre)
+
+        self.timeout = LabeledLineEdit(label="Timeout",text="3.0")
+        controlLayout.addWidget(self.timeout)
 
         self.layout = QVBoxLayout()
         self.layout.addWidget(controlWidget)
@@ -172,21 +182,24 @@ class TestWindow(QMainWindow):
         scope.configure_trg_pre(self.trg_pre.getInt() )
         scope.configure_trg_suf(self.trg_suf.getInt() )
 
+        scope.timeout = float(self.timeout.getText())
+
         for i in [0,1]:
             params = self.channels[i].getParams() 
             scope.setVoltage(i,params['voltage'])
             scope.setCoupling(i,params['coupling'])
-            scope.setLowpass(i,params['lowpass'])
 
             scope.configure_channel(i)
 
         self.scope.capture_start()
         (ch1data,ch2data) = self.scope.get_data()
-        
+       
+        timebaseVal = scope.timebaseDiv[scope.timebaseValues.index(self.speedsComboBox.getInt())] 
+
         if self.channels[0].getParams()['on']:
-            self.add_data(range(len(ch1data)),ch1data, color=Qt.red)
+            self.add_data(range(len(ch1data)),ch1data, Qt.red,timebaseVal)
         if self.channels[1].getParams()['on']:
-            self.add_data(range(len(ch2data)),ch2data, color=Qt.blue)
+            self.add_data(range(len(ch2data)),ch2data, Qt.blue,timebaseVal)
 
         self.set_title("Semi live Scope")
 
@@ -196,11 +209,11 @@ class TestWindow(QMainWindow):
     def set_title(self, title):
         self.chart.setTitle(title)
 
-    def add_data(self, xdata, ydata,color):
+    def add_data(self, xdata, ydata,color,timebase):
         curve = QLineSeries()
         curve.setPen(QPen(color,.1))
         curve.setUseOpenGL(True)
-        curve.append(series_to_polyline(xdata, ydata))
+        curve.append(series_to_polyline(xdata, ydata,timebase))
         self.chart.addSeries(curve)
         self.chart.createDefaultAxes()
 
