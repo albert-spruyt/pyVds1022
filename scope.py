@@ -26,10 +26,11 @@ def runThread(parent,cmdQueue,outQueue):
                     timeout = time.time() + parent.timeout
                     timedOut = False
                     while scope.get_data_ready() == 0:
-                        if timeout < time.time():
+                        if not timedOut and timeout < time.time():
+                            scope.force_trigger()
                             timedOut = True
-                            break
-                    if not timedOut:
+                            #break
+                    if True: #not timedOut:
                         print("Data ready")
                         outQueue.put(scope.get_data())
                     else:
