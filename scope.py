@@ -22,6 +22,7 @@ def runThread(parent,cmdQueue,outQueue):
                         scope.capture_init()
                     elif cmd == 'capture_start':
                         scope.capture_start()
+                        outQueue.put([ [],[] ])
                     elif cmd ==  'get_data':
                         print("waiting for data ready")
                         timeout = time.time() + parent.timeout
