@@ -269,16 +269,17 @@ class VDS1022:
         self._packed_cmd_response( 0x19, 0x0, 1, 'S') # what is this?
 
         # trg
-        self._packed_cmd_response( 0x24, 0x0, 2, 'S') # TRG_ADD
 
         # trg_holdoff_arg_ch1
         self._packed_cmd_response( 0x26, 0x0, 1, 'S') # trg_holdoff_arg_ext_ADe
+
 
         # trg_holdoff_index_ch1
         self._packed_cmd_response( 0x27, 0x41, 1, 'S') 
 
 #        self.configure_trg_edge_level(0x2832)
         self.configure_trg_edge_level(0x2832)
+        self.configure_trg(3,1)
 
         # chl_on: Arg appears to be a bit mask of channels to turn on
         self._packed_cmd_response( 0xb, 0x3, 1, 'S')
@@ -304,6 +305,35 @@ class VDS1022:
         self.configure_trg_suf(self.trg_suf);
 
         # edge_level_ext (again)
+
+    # triggerChannel channel1 0, channel2 1, external 2
+    def configure_trg(self, triggerType,triggerChannel  ):
+        print("configure_trg triggerType:",triggerType," triggerChannel ",triggerChannel)
+
+        trgArg = 0
+
+        trgArg |= 1<<15 # Single trigger mode
+
+        trgArg |= ((triggerType & 1) << 8)  |  ((triggerType & 0x2) << (14-1))
+
+        if triggerChannel == 2: #That means ext
+            trgArg |= 1 << 0
+        else: # channel 0 or 1
+            trgArg |= triggerChannel << 13
+
+
+        if triggerType == 0 :#Edge
+            # Rising 0 falling 1
+            raisefall = 0 
+            trgArg |= raisefall << 12
+            trgArg |= 0 << 9 # and 0 is called AC?
+    
+            # Sweepidx which is probably 0
+            trgArg |= (0<<10) | (0<<11)
+            
+        self._packed_cmd_response( 0x24, trgArg, 0x2, 'S') # TRG_ADD
+
+
 
     def configure_trg_edge_level(self,val):
         # edge_level_ch1

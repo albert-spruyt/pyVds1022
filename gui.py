@@ -94,11 +94,9 @@ class ScopeChannelWidget(QWidget):
             )
         self.voltageComboBox.setCurrentIndex(6)
 
-        items = ['1','0','2']
-        itemNames = ['DC','AC','Ground']
         self.couplingComboBox = LabeledComboBox(label='Coupling',
-                items=items,
-                itemLabels=itemNames,
+                items=map(str,scope.couplingOrdinals),
+                itemLabels=scope.couplingNames,
                 parent=self,
             ) 
 
@@ -111,6 +109,52 @@ class ScopeChannelWidget(QWidget):
                 'voltage': self.voltageComboBox.getInt(),
                 'coupling': self.couplingComboBox.getInt(),
             }
+
+class ScopeTriggerWidget(QWidget):
+    def __init__(self,name):
+        super(ScopeTriggerWidget, self).__init__()
+
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0,0,0,0)
+        self.setLayout(layout)
+        layout.addWidget(QLabel(name))
+
+        self.triggerTypeComboBox = LabeledComboBox(label='Trigger Mode',
+                items=map(str,scope.trgTypeOrdinals),
+                itemLabels=scope.trgTypeNames,
+                parent=self,
+            )
+#        self.triggerType.setCurrentIndex(3)
+
+        self.triggerChannelComboBox = LabeledComboBox(label='Trigger Channel',
+                items=map(str,scope.trgChannelOrdinals),
+                itemLabels=scope.trgChannelNames,
+                parent=self,
+            )
+        self.triggerPulseLow = LabeledComboBox(label='Pulse low',
+                items=[ str(x) for x in range(-128,127,10)],
+                itemLabels=[ str(x) for x in range(-128,127,10)],
+                parent=self,
+            )
+        self.triggerPulseHigh = LabeledComboBox(label='Pulse high',
+                items=[ str(x) for x in range(-128,127,10)],
+                itemLabels=[ str(x) for x in range(-128,127,10)],
+                parent=self,
+            )
+
+        layout.addWidget(self.triggerChannelComboBox)
+        layout.addWidget(self.triggerTypeComboBox)
+        layout.addWidget(self.triggerPulseLow)
+        layout.addWidget(self.triggerPulseHigh)
+
+    def getParams(self):
+        return {
+                'triggerChannel': self.triggerChannelComboBox.getInt(),
+                'triggerMode': self.triggerTypeComboBox.getInt(),
+                'pulseHigh': self.triggerPulseHigh.getInt(),
+                'pulseLow': self.triggerPulseLow.getInt(),
+            }
+
 
     
 class TestWindow(QMainWindow):
@@ -150,11 +194,13 @@ class TestWindow(QMainWindow):
             )
         self.trg_suf.setCurrentIndex(5)
 
+        self.trg = ScopeTriggerWidget('trigger') 
+
         controlLayout.addWidget(self.speedsComboBox)
         controlLayout.addWidget(self.trg_suf)
         controlLayout.addWidget(self.trg_pre)
 
-        self.timeout = LabeledLineEdit(label="Timeout",text="3.0")
+        self.timeout = LabeledLineEdit(label="Timeout",text="1.0")
         controlLayout.addWidget(self.timeout)
 
         self.layout = QVBoxLayout()
@@ -162,6 +208,7 @@ class TestWindow(QMainWindow):
         self.channels = [ ScopeChannelWidget('1'), ScopeChannelWidget('2') ]
         self.layout.addWidget(self.channels[0])
         self.layout.addWidget(self.channels[1])
+        self.layout.addWidget(self.trg)
         self.layout.addWidget(self.view)
 
         self.layoutWidget = QWidget()
@@ -177,6 +224,7 @@ class TestWindow(QMainWindow):
     def on_get(self):
         self.chart.removeAllSeries()
 
+        # Configure Scope
         scope.configure_timebase( self.speedsComboBox.getInt() )
 
         scope.configure_trg_pre(self.trg_pre.getInt() )
@@ -191,7 +239,16 @@ class TestWindow(QMainWindow):
 
             scope.configure_channel(i)
 
+        trgParams = self.trg.getParams()
+
+        scope.configure_trg(trgParams['triggerMode'],trgParams['triggerChannel'])
+        scope.configure_trg_edge_level( (trgParams['pulseHigh'] << 8) | trgParams['pulseLow'] )
+
+
         self.scope.capture_start()
+
+
+        # Get the data and plot it
         (ch1data,ch2data) = self.scope.get_data()
        
         timebaseVal = scope.timebaseDiv[scope.timebaseValues.index(self.speedsComboBox.getInt())] 
