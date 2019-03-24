@@ -22,22 +22,21 @@ def runThread(parent,cmdQueue,outQueue):
                         scope.capture_init()
                     elif cmd == 'capture_start':
                         scope.capture_start()
-                        outQueue.put([ [],[] ])
                     elif cmd ==  'get_data':
                         print("waiting for data ready")
                         timeout = time.time() + parent.timeout
                         timedOut = False
                         while scope.get_data_ready() == 0:
-                            if timeout < time.time():
+                            if not timedOut and timeout < time.time():
+                                scope.force_trigger()
                                 timedOut = True
-                                break
-                        if not timedOut:
+                                #break
+                        if True: #not timedOut:
                             print("Data ready")
                             outQueue.put(scope.get_data())
                         else:
                             print("Timedout")
                             scope.force_trigger()
-                            outQueue.put([ [],[] ])
                     elif cmd == 'trg_pre':
                         scope.configure_trg_pre(args[0])
                     elif cmd == 'trg_suf':
