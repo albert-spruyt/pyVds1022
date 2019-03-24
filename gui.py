@@ -4,11 +4,11 @@ from scope import Scope
 from Trace import TraceSet,Trace 
 import sys
     
-from PyQt5.QtChart import QChart, QChartView, QLineSeries
 from PyQt5.QtGui import QPolygonF, QPainter, QPen
 from PyQt5.QtWidgets import QMainWindow, QHBoxLayout, QVBoxLayout, QPushButton,QWidget,QLabel,QComboBox, QApplication, QCheckBox, QLineEdit
 from PyQt5.QtCore import pyqtSlot, Qt, QTimer
 import numpy as np
+import pyqtgraph as pg
 
 class LabeledComboBox(QWidget):
     def __init__(self,label='Label',parent=None,items=[],itemLabels=None):
@@ -162,10 +162,10 @@ class TestWindow(QMainWindow):
         super(TestWindow, self).__init__(parent=parent)
 
         self.scope = scope
-        self.chart = QChart()
-        self.chart.legend().hide()
-        self.view = QChartView(self.chart)
-        self.view.setRenderHint(QPainter.Antialiasing)
+        self.chart = pg.GraphicsLayoutWidget()
+        self.plot = self.chart.addPlot()
+        self.plot1 = self.plot.plot([], [], pen=(255,0,0))
+        self.plot2 = self.plot.plot([], [], pen=(0,255,0))
 
         controlLayout = QHBoxLayout()
         controlLayout.setContentsMargins(0,0,0,0)
@@ -209,7 +209,7 @@ class TestWindow(QMainWindow):
         self.layout.addWidget(self.channels[0])
         self.layout.addWidget(self.channels[1])
         self.layout.addWidget(self.trg)
-        self.layout.addWidget(self.view)
+        self.layout.addWidget(self.chart)
 
         self.layoutWidget = QWidget()
         self.layoutWidget.setLayout(self.layout)
@@ -222,7 +222,9 @@ class TestWindow(QMainWindow):
 
     @pyqtSlot()
     def on_get(self):
-        self.chart.removeAllSeries()
+        #self.chart.removeAllSeries() # FIXME
+        self.plot1.setData([],[])
+        self.plot2.setData([],[])
 
         # Configure Scope
         scope.configure_timebase( self.speedsComboBox.getInt() )
@@ -251,28 +253,23 @@ class TestWindow(QMainWindow):
         # Get the data and plot it
         (ch1data,ch2data) = self.scope.get_data()
        
+        # TODO: set it only when user changes vdiv?
+        range1 = self.scope.scope.get_range(0)
+        range2 = self.scope.scope.get_range(1)
+        self.plot.getViewBox().setYRange(min(range1[0], range2[0]), max(range1[1], range2[1]))
+
         timebaseVal = scope.timebaseDiv[scope.timebaseValues.index(self.speedsComboBox.getInt())] 
 
         if self.channels[0].getParams()['on']:
-            self.add_data(range(len(ch1data)),ch1data, Qt.red,timebaseVal)
+            self.add_data(self.plot1, ch1data, Qt.red,timebaseVal)
         if self.channels[1].getParams()['on']:
-            self.add_data(range(len(ch2data)),ch2data, Qt.blue,timebaseVal)
-
-        self.set_title("Semi live Scope")
+            self.add_data(self.plot2, ch2data, Qt.blue,timebaseVal)
 
         if self.autoCheckBox.isChecked():
             QTimer.singleShot(200,self.on_get)
         
-    def set_title(self, title):
-        self.chart.setTitle(title)
-
-    def add_data(self, xdata, ydata,color,timebase):
-        curve = QLineSeries()
-        curve.setPen(QPen(color,.1))
-        curve.setUseOpenGL(True)
-        curve.append(series_to_polyline(xdata, ydata,timebase))
-        self.chart.addSeries(curve)
-        self.chart.createDefaultAxes()
+    def add_data(self, plot, ydata,color,timebase):
+        plot.setData(np.array(range(len(ydata))) / timebase, np.array(ydata))
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

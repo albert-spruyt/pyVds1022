@@ -402,6 +402,13 @@ class VDS1022:
 
         return ret
 
+    def get_range(self, i):
+        # see above, TODO: de-duplicate
+        ZEROOFF_HACK = 50
+        vdivs = self.vdivs[self.voltage[i]]
+        Range = (float(vdivs[0]) / float(vdivs[1])) * 10  / 256# value of 1/5? Total range?
+        return (Range * (-128 - ZEROOFF_HACK), Range * (127 - ZEROOFF_HACK))
+
     def force_trigger(self):
         self._packed_cmd_response( 0xc, 0x3, 1, 'S') # FORCETRIG_add
 
