@@ -312,14 +312,21 @@ class VDS1022:
 
         trgArg = 0
 
-        trgArg |= 1<<15 # Single trigger mode
+        alternate = False
+        if alternate:
+            trgArg |= 1<<15 # alternate trigger mode
 
-        trgArg |= ((triggerType & 1) << 8)  |  ((triggerType & 0x2) << (14-1))
+        if alternate:
+            trgArg |= ((triggerType & 1) << 13)  |  ((triggerType & 0x2) << (8-1))
+            assert triggerChannel < 2
+            trgArg |= triggerChannel << 14
+        else:
+            trgArg |= ((triggerType & 1) << 8)  |  ((triggerType & 0x2) << (14-1))
 
-        if triggerChannel == 2: #That means ext
-            trgArg |= 1 << 0
-        else: # channel 0 or 1
-            trgArg |= triggerChannel << 13
+            if triggerChannel == 2: #That means ext
+                trgArg |= 1 << 0
+            else: # channel 0 or 1
+                trgArg |= triggerChannel << 13
 
 
         if triggerType == 0 :#Edge
