@@ -9,7 +9,7 @@ def AddValueAttachCommand(name,address,length,value):
     return ret
 
 def printBytes(val):
-    for i in range(val):
+    for i in range(len(val)):
         if i % 16 == 0:
             print('')
         print("%2.2x"%val[i],end=' ')
@@ -171,7 +171,7 @@ class VDS1022:
     def write(self,buf):
         if self.debug:
             print("\nSending: ")
-            printBytes(ord(x) for x in buf)
+            printBytes(buf)
         self.handle.bulkWrite(self.BULK_WRITE_ENDPOINT,buf,len(buf))
 
     def read(self,dataLength=DEFAULT_RESPONSE_LENGTH):
