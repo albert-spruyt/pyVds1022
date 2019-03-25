@@ -164,6 +164,7 @@ class TestWindow(QMainWindow):
         self.scope = scope
         self.chart = pg.GraphicsLayoutWidget()
         self.plot = self.chart.addPlot()
+        self.plot.showGrid(y=True)
         self.plot1 = self.plot.plot([], [], pen=(255,0,0))
         self.plot2 = self.plot.plot([], [], pen=(0,255,0))
 
