@@ -30,6 +30,8 @@ class VDS1022:
     AMPLITUDE = 1
     COMPENSATION = 2
 
+    ZEROOFF_HACK = 0
+
     vdivs = [
 	[ 5, 1000 ],
 	[ 10, 1000 ],
@@ -234,7 +236,7 @@ class VDS1022:
         # zero_off_ch1
         # TODO: 50 should be adjustable #TODO what is going on here
         tmp = self.calibration_data[self.COMPENSATION][channel][self.voltage[channel]]
-        tmp -= 50 * self.calibration_data[self.AMPLITUDE][channel][self.voltage[channel]] // 100
+        tmp -= self.ZEROOFF_HACK * self.calibration_data[self.AMPLITUDE][channel][self.voltage[channel]] // 100
 
         if channel == 0:
             self._packed_cmd_response( 0x10a, tmp, 2, 'S')
@@ -393,21 +395,19 @@ class VDS1022:
             # on square waves (sometimes you get a bad sample (or even two) at the start of the pre), idk
 
             data_in = np.frombuffer( buf[ 11 + 100 + 1:], '<i1').astype('float32')
-            ZEROOFF_HACK = 50 
             vdivs = self.vdivs[self.voltage[i]]
             # Empirically tested :( (there are 10 divs on the OWON screenshot I found. But there are still supposed to be 256 values in a byte...
             # or optionally only 5 positive divs. So somewhere something is wrong
-            Range = (float(vdivs[0]) / float(vdivs[1])) * 10  / 256# value of 1/5? Total range?
-            ret[channel] = Range * ( data_in - ZEROOFF_HACK)
+            Range = (float(vdivs[0]) / float(vdivs[1])) / 25 #* 10  / 256# value of 1/5? Total range?
+            ret[channel] = Range * ( data_in - self.ZEROOFF_HACK)
 
         return ret
 
     def get_range(self, i):
         # see above, TODO: de-duplicate
-        ZEROOFF_HACK = 50
         vdivs = self.vdivs[self.voltage[i]]
-        Range = (float(vdivs[0]) / float(vdivs[1])) * 10  / 256# value of 1/5? Total range?
-        return (Range * (-128 - ZEROOFF_HACK), Range * (127 - ZEROOFF_HACK))
+        Range = (float(vdivs[0]) / float(vdivs[1])) / 25 #* 10  / 256# value of 1/5? Total range?
+        return (Range * (-128 - self.ZEROOFF_HACK), Range * (127 - self.ZEROOFF_HACK))
 
     def force_trigger(self):
         self._packed_cmd_response( 0xc, 0x3, 1, 'S') # FORCETRIG_add
