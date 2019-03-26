@@ -119,12 +119,17 @@ class ScopeTriggerWidget(QWidget):
         self.setLayout(layout)
         layout.addWidget(QLabel(name))
 
-        self.triggerTypeComboBox = LabeledComboBox(label='Trigger Mode',
+        self.triggerTypeComboBox = LabeledComboBox(label='Trigger Type',
                 items=map(str,scope.trgTypeOrdinals),
                 itemLabels=scope.trgTypeNames,
                 parent=self,
             )
 #        self.triggerType.setCurrentIndex(3)
+        self.triggerModeComboBox = LabeledComboBox(label='Trigger Mode',
+                items=map(str,scope.edgeTrgModeOrdinals),
+                itemLabels=scope.edgeTrgModeNames,
+                parent=self,
+            )
 
         self.triggerChannelComboBox = LabeledComboBox(label='Trigger Channel',
                 items=map(str,scope.trgChannelOrdinals),
@@ -144,6 +149,7 @@ class ScopeTriggerWidget(QWidget):
 
         layout.addWidget(self.triggerChannelComboBox)
         layout.addWidget(self.triggerTypeComboBox)
+        layout.addWidget(self.triggerModeComboBox)
         layout.addWidget(self.triggerPulseLow)
         layout.addWidget(self.triggerPulseHigh)
 
@@ -151,6 +157,7 @@ class ScopeTriggerWidget(QWidget):
         return {
                 'triggerChannel': self.triggerChannelComboBox.getInt(),
                 'triggerMode': self.triggerTypeComboBox.getInt(),
+                'triggerExtraMode': self.triggerModeComboBox.getInt(),
                 'pulseHigh': self.triggerPulseHigh.getInt(),
                 'pulseLow': self.triggerPulseLow.getInt(),
             }
@@ -244,7 +251,7 @@ class TestWindow(QMainWindow):
 
         trgParams = self.trg.getParams()
 
-        scope.configure_trg(trgParams['triggerMode'],trgParams['triggerChannel'])
+        scope.configure_trg(trgParams['triggerMode'],trgParams['triggerChannel'],trgParams['triggerExtraMode'])
         scope.configure_trg_edge_level( (trgParams['pulseHigh'] << 8) | trgParams['pulseLow'] )
 
 

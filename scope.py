@@ -45,7 +45,7 @@ def runThread(parent,cmdQueue,outQueue):
                     elif cmd == 'trg_edge_level':
                         scope.configure_trg_edge_level(args[0])
                     elif cmd == 'trg':
-                        scope.configure_trg(args[0],args[1])
+                        scope.configure_trg(args[0],args[1],args[2])
                     elif cmd == 'close':
                         close=True
                         break
@@ -79,6 +79,9 @@ class Scope():
 
     trgTypeNames =     [ 'Edge','Video','Slope','Pulse' ]
     trgTypeOrdinals =  [     0 ,     2 ,    1  ,     3  ]
+
+    edgeTrgModeNames = [ 'Rising', 'Falling' ]
+    edgeTrgModeOrdinals = [     0,         1 ]
 
     trgChannelNames    = ["Channel 1","Channel 2","External"]
     trgChannelOrdinals = [          0,          1,         2]
@@ -155,8 +158,8 @@ class Scope():
     def configure_trg_edge_level(self,val):
         self.cmdQueue.put(['trg_edge_level',[val]])
 
-    def configure_trg(self,triggerType,triggerChannel):
-        self.cmdQueue.put(['trg',[triggerType,triggerChannel]])
+    def configure_trg(self,triggerType,triggerChannel,triggerExtra):
+        self.cmdQueue.put(['trg',[triggerType,triggerChannel, triggerExtra]])
 
     def reconnect(self):
         pass

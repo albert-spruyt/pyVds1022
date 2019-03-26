@@ -281,7 +281,7 @@ class VDS1022:
 
 #        self.configure_trg_edge_level(0x2832)
         self.configure_trg_edge_level(0x2832)
-        self.configure_trg(3,1)
+        self.configure_trg(3,1,0)
 
         # chl_on: Arg appears to be a bit mask of channels to turn on
         self._packed_cmd_response( 0xb, 0x3, 1, 'S')
@@ -309,7 +309,7 @@ class VDS1022:
         # edge_level_ext (again)
 
     # triggerChannel channel1 0, channel2 1, external 2
-    def configure_trg(self, triggerType,triggerChannel  ):
+    def configure_trg(self, triggerType,triggerChannel,triggerExtra  ):
         print("configure_trg triggerType:",triggerType," triggerChannel ",triggerChannel)
 
         trgArg = 0
@@ -333,7 +333,7 @@ class VDS1022:
 
         if triggerType == 0 :#Edge
             # Rising 0 falling 1
-            raisefall = 0 
+            raisefall = triggerExtra
             trgArg |= raisefall << 12
             trgArg |= 0 << 9 # and 0 is called AC?
     
